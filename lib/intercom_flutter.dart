@@ -1,6 +1,7 @@
 library intercom_flutter;
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
@@ -100,5 +101,23 @@ class Intercom {
 
   static Future<dynamic> displayHelpCenter() {
     return _channel.invokeMethod('displayHelpCenter');
+  }
+
+  static Future<dynamic> setDeviceToken(Uint8List deviceToken) {
+    return _channel.invokeMethod('setDeviceToken', {
+      'deviceToken': deviceToken
+    });
+  }
+
+  static Future<dynamic> getDeviceToken() {
+    return _channel.invokeMethod('getDeviceToken');
+  }
+
+  static Future<dynamic> requestNotificationsPermission({bool sound, bool badge, bool alert}) {
+    return _channel.invokeMethod('requestNotificationsPermission', {
+      'sound': sound,
+      'badge': badge,
+      'alert': alert
+    });
   }
 }

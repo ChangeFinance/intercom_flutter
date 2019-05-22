@@ -1,16 +1,26 @@
 #import "IntercomFlutterPlugin.h"
 #import "Intercom.h"
+#import <UserNotifications/UserNotifications.h>
 
-@implementation IntercomFlutterPlugin
+
+typedef void(^DeviceTokenBlock)(NSData *);
+
+@implementation IntercomFlutterPlugin {
+    NSData *_deviceToken;
+    DeviceTokenBlock _deviceTokenBlock;
+}
+
+
 + (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar {
     IntercomFlutterPlugin* instance = [[IntercomFlutterPlugin alloc] init];
     FlutterMethodChannel* channel =
     [FlutterMethodChannel methodChannelWithName:@"maido.io/intercom"
                                 binaryMessenger:[registrar messenger]];
+    [registrar addApplicationDelegate: instance];
     [registrar addMethodCallDelegate:instance channel:channel];
 }
 
-- (void) handleMethodCall:(FlutterMethodCall *)call result:(FlutterResult)result{
+- (void)handleMethodCall:(FlutterMethodCall *)call result:(FlutterResult)result{
     if([@"initialize" isEqualToString:call.method]) {
         NSString *iosApiKey = call.arguments[@"iosApiKey"];
         NSString *appId = call.arguments[@"appId"];
@@ -39,6 +49,41 @@
             }
             result(@"Registered user");
         }
+    }
+    else if([@"setDeviceToken" isEqualToString:call.method]) {
+        FlutterStandardTypedData* deviceTokenData = call.arguments[@"deviceToken"];
+        NSData *deviceToken = deviceTokenData.data;
+        [Intercom setDeviceToken: deviceToken];
+        result(@"Setting device token");
+    }
+    else if([@"getDeviceToken" isEqualToString:call.method]) {
+        if (_deviceToken) {
+            result(_deviceToken);
+        } else {
+            _deviceTokenBlock = ^void(NSData *deviceToken) {
+                result(deviceToken);
+            };
+        }
+    }
+    else if([@"requestNotificationsPermission" isEqualToString:call.method]) {
+        UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+        UNAuthorizationOptions options = 0;
+        NSDictionary *arguments = call.arguments;
+        if ([arguments[@"sound"] boolValue]) {
+            options |= UIUserNotificationTypeSound;
+        }
+        if ([arguments[@"alert"] boolValue]) {
+            options |= UIUserNotificationTypeAlert;
+        }
+        if ([arguments[@"badge"] boolValue]) {
+            options |= UIUserNotificationTypeBadge;
+        }
+        [center requestAuthorizationWithOptions: options completionHandler:^(BOOL granted, NSError * _Nullable error){
+            if (!error) {
+                [[UIApplication sharedApplication] registerForRemoteNotifications];
+                result(@"Requested notifications permission");
+            }
+        }];
     }
     else if([@"setLauncherVisibility" isEqualToString:call.method]) {
         NSString *visibility = call.arguments[@"visibility"];
@@ -103,4 +148,12 @@
         result(FlutterMethodNotImplemented);
     }
 }
+
+- (void)application:(UIApplication *)application didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+    _deviceToken = deviceToken;
+    if (_deviceTokenBlock) {
+        _deviceTokenBlock(deviceToken);
+    }
+}
+
 @end
